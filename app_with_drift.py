@@ -31,8 +31,12 @@ class DriftMonitor:
         self.psi_threshold = psi_threshold
 
     def calculate_psi(self, expected, actual, bins=10):
-        expected_counts, _ = np.histogram(expected, bins=bins)
-        actual_counts, _ = np.histogram(actual, bins=bins)
+        min_val = min(np.min(expected), np.min(actual))
+        max_val = max(np.max(expected), np.max(actual))
+        bins_edges = np.linspace(min_val, max_val, bins + 1)
+
+        expected_counts, _ = np.histogram(expected, bins=bins_edges)
+        actual_counts, _ = np.histogram(actual, bins=bins_edges)
 
         expected_perc = expected_counts / (len(expected) + 1e-6)
         actual_perc = actual_counts / (len(actual) + 1e-6)
@@ -148,17 +152,25 @@ def predict(payload: DASSAssessment):
         # ---------------- Drift Monitoring ----------------
         drift_flag = False
         if drift_monitor.reference:
-            ref_mean = drift_monitor.reference.get("mean", None)
-            if ref_mean is not None:
-                drift_result = drift_monitor.check_drift(
-                    ref_mean, dep_feat.flatten()
-                )
-                drift_flag = drift_result["drift_detected"]
-
-                if drift_flag:
-                    logging.warning(f"Drift detected: {drift_result}")
-                else:
-                    logging.info(f"No drift: {drift_result}")
+            ref_dep = drift_monitor.reference.get("dep_train_scaled_flattened", None)
+            ref_anx = drift_monitor.reference.get("anx_train_scaled_flattened", None)
+            ref_str = drift_monitor.reference.get("str_train_scaled_flattened", None)
+            
+            any_drift = False
+            model_names = ["Depression", "Anxiety", "Stress"]
+            references = [ref_dep, ref_anx, ref_str]
+            features = [dep_scaled, anx_scaled, str_scaled]
+            
+            for m_name, ref, feat in zip(model_names, references, features):
+                if ref is not None:
+                    drift_result = drift_monitor.check_drift(ref, feat.flatten())
+                    if drift_result["drift_detected"]:
+                        any_drift = True
+                        logging.warning(f"{m_name} Drift detected: {drift_result}")
+                    else:
+                        logging.info(f"No {m_name} drift: {drift_result}")
+            
+            drift_flag = any_drift
 
         return DASSResponse(
             depression_level=dep_level,
