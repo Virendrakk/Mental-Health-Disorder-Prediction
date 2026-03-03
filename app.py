@@ -1,7 +1,6 @@
 from typing import List
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, conint
-from fastapi.middleware.cors import CORSMiddleware
 import joblib
 import numpy as np
 import warnings
@@ -14,12 +13,6 @@ app = FastAPI(
     version="1.0"
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 MODEL_PATH = "final_dass_system.pkl"
 
@@ -79,6 +72,8 @@ STR_IDX = [0, 5, 7, 10, 11, 13, 17, 21, 26, 28, 31, 32, 34, 38]
 def predict_dass(payload: DASSAssessmentBase):
     if bundle is None:
         raise HTTPException(status_code=503, detail="Models are not loaded.")
+    if payload is None:
+        raise HTTPException(status_code=400, detail="Payload is required.")
 
     try:
         # Common demographic values string
@@ -97,7 +92,7 @@ def predict_dass(payload: DASSAssessmentBase):
         anx_feat = np.array([anx_answers + dv])
         str_feat = np.array([str_answers + dv])
 
-        # Feature scaling
+        # Feature scaling (Inherently computes Z-scores via StandardScaler)
         dep_scaled = bundle["dep_scaler"].transform(dep_feat)
         anx_scaled = bundle["anx_scaler"].transform(anx_feat)
         str_scaled = bundle["str_scaler"].transform(str_feat)
